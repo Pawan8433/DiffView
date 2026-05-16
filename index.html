@@ -318,13 +318,14 @@
   .diff-line.removed { background: var(--red-bg); }
   .diff-line.removed .line-num { background: rgba(248,81,73,0.05); color: var(--red); }
   .diff-line.removed .line-gutter { background: rgba(248,81,73,0.15); color: var(--red); }
-  .diff-line.removed .line-text { text-decoration: line-through; text-decoration-color: var(--red); }
+  /* .diff-line.removed .line-text {     text-decoration: line-through; text-decoration-color: var(--red);  } */
 
   .diff-line.unchanged .line-gutter { color: var(--text-subtle); }
 
   /* Inline word highlights */
   .word-added { background: rgba(63,185,80,0.35); border-radius: 2px; outline: 1px solid rgba(63,185,80,0.5); }
-  .word-removed { background: rgba(248,81,73,0.35); border-radius: 2px; outline: 1px solid rgba(248,81,73,0.5); }
+  .word-removed { background: rgba(248,81,73,0.35); border-radius: 2px; outline: 1px solid rgba(248,81,73,0.5); text-decoration: line-through;
+    text-decoration-color: var(--red); }
 
   .empty-state { padding: 60px 20px; text-align: center; color: var(--text-subtle); }
   .empty-state .big-icon { font-size: 48px; margin-bottom: 16px; }
