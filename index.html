@@ -4,765 +4,784 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DiffScope — Text Difference Checker</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-/* ── TOKENS ─────────────────────────────────────────────── */
-:root {
-  --bg:          #0d1117;
-  --surface:     #161b22;
-  --surface2:    #1c2128;
-  --border:      #30363d;
-  --border2:     #21262d;
-  --text:        #e6edf3;
-  --muted:       #7d8590;
-  --subtle:      #3d444d;
-  --accent:      #58a6ff;
-  --accent-dim:  rgba(88,166,255,.12);
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --border-hover: #484f58;
+    --text: #e6edf3;
+    --text-muted: #7d8590;
+    --text-subtle: #484f58;
+    --accent: #58a6ff;
+    --accent-glow: rgba(88,166,255,0.15);
+    --green: #3fb950;
+    --green-bg: rgba(63,185,80,0.1);
+    --green-border: rgba(63,185,80,0.3);
+    --red: #f85149;
+    --red-bg: rgba(248,81,73,0.1);
+    --red-border: rgba(248,81,73,0.3);
+    --yellow: #d29922;
+    --yellow-bg: rgba(210,153,34,0.1);
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 8px 32px rgba(0,0,0,0.4);
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --font-ui: 'Syne', sans-serif;
+    --transition: 0.2s ease;
+  }
 
-  /* STRONG diff colours — key fix for readability */
-  --add-bg:      #0d2818;
-  --add-gutter:  #1a4a28;
-  --add-fg:      #56d364;
-  --add-word:    rgba(86,211,100,.40);
-  --add-word-bd: #3fb950;
+  [data-theme="light"] {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface2: #f6f8fa;
+    --border: #d0d7de;
+    --border-hover: #adb5bd;
+    --text: #1f2328;
+    --text-muted: #636c76;
+    --text-subtle: #c9d1d9;
+    --accent: #0969da;
+    --accent-glow: rgba(9,105,218,0.1);
+    --green: #1a7f37;
+    --green-bg: rgba(26,127,55,0.08);
+    --green-border: rgba(26,127,55,0.25);
+    --red: #cf222e;
+    --red-bg: rgba(207,34,46,0.08);
+    --red-border: rgba(207,34,46,0.25);
+    --yellow: #9a6700;
+    --yellow-bg: rgba(154,103,0,0.08);
+    --shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
 
-  --del-bg:      #2d0f0f;
-  --del-gutter:  #5c1a1a;
-  --del-fg:      #ff7b72;
-  --del-word:    rgba(255,123,114,.40);
-  --del-word-bd: #f85149;
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  --radius:8px;
-  --mono:'JetBrains Mono','Fira Code','Consolas',monospace;
-  --ui:'Syne',sans-serif;
-  --t:.18s ease;
-}
-[data-theme="light"] {
-  --bg:#f3f4f6; --surface:#fff; --surface2:#f6f8fa;
-  --border:#d0d7de; --border2:#e8ebee; --text:#1f2328;
-  --muted:#57606a; --subtle:#d0d7de;
-  --accent:#0969da; --accent-dim:rgba(9,105,218,.08);
-  --add-bg:#e6ffec; --add-gutter:#ccffd8; --add-fg:#116329;
-  --add-word:rgba(17,99,41,.22); --add-word-bd:#2da44e;
-  --del-bg:#ffebe9; --del-gutter:#ffd7d5; --del-fg:#82071e;
-  --del-word:rgba(130,7,30,.22); --del-word-bd:#cf222e;
-}
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    min-height: 100vh;
+    transition: background var(--transition), color var(--transition);
+    overflow-x: hidden;
+  }
 
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-button{font-family:inherit;cursor:pointer}
-textarea{font-family:inherit}
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+  }
 
-body {
-  background:var(--bg);color:var(--text);font-family:var(--ui);
-  min-height:100vh;transition:background var(--t),color var(--t);
-}
-body::before {
-  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background-image:linear-gradient(var(--border) 1px,transparent 1px),
-    linear-gradient(90deg,var(--border) 1px,transparent 1px);
-  background-size:48px 48px;opacity:.07;
-}
-.wrap { position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:22px 18px 80px }
+  .app-wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 20px 60px;
+  }
 
-/* HEADER */
-header {
-  display:flex;align-items:center;justify-content:space-between;
-  flex-wrap:wrap;gap:14px;
-  margin-bottom:24px;padding-bottom:18px;
-  border-bottom:1px solid var(--border);
-}
-.logo { display:flex;align-items:center;gap:12px }
-.logo-icon {
-  width:40px;height:40px;border-radius:8px;
-  background:linear-gradient(135deg,#58a6ff,#a371f7);
-  display:grid;place-items:center;font-size:18px;flex-shrink:0;
-  box-shadow:0 0 18px rgba(88,166,255,.25);
-}
-.logo h1 { font-size:20px;font-weight:800;letter-spacing:-.3px;line-height:1 }
-.logo p  { font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:3px }
-.hdr-r  { display:flex;align-items:center;gap:10px;flex-wrap:wrap }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 16px;
+  }
 
-.badge {
-  font-family:var(--mono);font-size:11px;
-  padding:3px 9px;border-radius:20px;
-  border:1px solid var(--border);color:var(--muted);background:var(--surface);
-}
-.badge.live { border-color:rgba(63,185,80,.4);color:#3fb950;background:rgba(63,185,80,.08) }
-.badge.live::before { content:'● ';animation:blink 1.4s infinite }
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+  .logo-area { display: flex; align-items: center; gap: 14px; }
 
-.tog-wrap { display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:12px;color:var(--muted) }
-.tog-track { width:38px;height:20px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);position:relative;transition:background var(--t) }
-.tog-thumb { position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:var(--muted);transition:transform var(--t),background var(--t) }
-[data-theme="light"] .tog-thumb { transform:translateX(18px);background:var(--accent) }
+  .logo-icon {
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, var(--accent), #a371f7);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 0 20px var(--accent-glow);
+    flex-shrink: 0;
+  }
 
-/* TOOLBAR */
-.toolbar { display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px }
-.tb-lbl { font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase }
-.seg { display:flex;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px;gap:2px }
-.sb {
-  font-family:var(--mono);font-size:11px;font-weight:500;
-  padding:5px 13px;border-radius:4px;border:none;
-  background:transparent;color:var(--muted);
-  transition:background var(--t),color var(--t);white-space:nowrap;
-}
-.sb.on { background:var(--accent);color:#fff }
-.sb:hover:not(.on) { background:var(--surface2);color:var(--text) }
-.spacer { flex:1 }
+  .logo-text h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: var(--text); line-height: 1; }
+  .logo-text p { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px; }
 
-.ibtn {
-  font-family:var(--mono);font-size:11px;
-  padding:5px 11px;border-radius:5px;
-  border:1px solid var(--border);
-  background:var(--surface);color:var(--muted);
-  transition:all var(--t);white-space:nowrap;
-}
-.ibtn:hover { border-color:var(--accent);color:var(--accent);background:var(--accent-dim) }
-.ibtn label { cursor:pointer }
-.ibtn input[type=file] { display:none }
+  .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-/* INPUTS */
-.inputs { display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px }
-.inp-panel {
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  display:flex;flex-direction:column;overflow:hidden;
-  transition:border-color var(--t),box-shadow var(--t);
-}
-.inp-panel:focus-within { border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim) }
-.inp-hdr {
-  display:flex;align-items:center;justify-content:space-between;
-  padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border);gap:8px;
-}
-.inp-lbl { display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase }
-.dot { width:8px;height:8px;border-radius:50%;flex-shrink:0 }
-.dot.r { background:var(--del-fg) }
-.dot.g { background:var(--add-fg) }
-.inp-acts { display:flex;gap:5px }
+  .badge {
+    font-family: var(--font-mono); font-size: 11px; padding: 4px 10px;
+    border-radius: 20px; border: 1px solid var(--border);
+    color: var(--text-muted); background: var(--surface);
+  }
 
-textarea.code {
-  flex:1;width:100%;min-height:220px;
-  padding:12px 14px;background:transparent;border:none;outline:none;
-  color:var(--text);font-family:var(--mono);font-size:12.5px;line-height:1.75;
-  resize:vertical;tab-size:2;
-}
-textarea.code::placeholder { color:var(--subtle);font-style:italic }
-.inp-foot { padding:5px 13px;font-size:10px;font-family:var(--mono);color:var(--subtle);border-top:1px solid var(--border2) }
+  .badge.live { border-color: var(--green-border); color: var(--green); background: var(--green-bg); }
+  .badge.live::before { content: '● '; animation: pulse 1.5s infinite; }
 
-/* ACTIONS */
-.actions { display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:22px }
-.btn {
-  display:inline-flex;align-items:center;gap:7px;
-  padding:9px 18px;border-radius:6px;
-  font-family:var(--ui);font-size:13px;font-weight:700;
-  border:none;transition:all var(--t);white-space:nowrap;
-}
-.btn-p { background:var(--accent);color:#fff;box-shadow:0 3px 12px rgba(88,166,255,.3) }
-.btn-p:hover { filter:brightness(1.1);transform:translateY(-1px) }
-.btn-p:active { transform:none }
-.btn-g { background:var(--surface);color:var(--muted);border:1px solid var(--border) }
-.btn-g:hover { border-color:var(--border2);color:var(--text);background:var(--surface2) }
-.btn-d { background:var(--surface);color:var(--del-fg);border:1px solid rgba(248,81,73,.3) }
-.btn-d:hover { background:rgba(248,81,73,.08) }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-.stats { display:none;align-items:center;gap:14px;margin-left:auto;flex-wrap:wrap }
-.stat { display:flex;align-items:center;gap:5px;font-size:12px;font-family:var(--mono);color:var(--muted) }
-.st-dot { width:6px;height:6px;border-radius:50% }
-.st-dot.g { background:var(--add-fg) }
-.st-dot.r { background:var(--del-fg) }
-.st-dot.u { background:var(--subtle) }
-.stat strong { color:var(--text) }
+  .theme-toggle {
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; font-size: 13px; color: var(--text-muted); user-select: none;
+  }
 
-/* OUTPUT */
-.output {
-  display:none;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.35);
-  animation:up .25s ease;
-}
-.output.on { display:flex;flex-direction:column }
-@keyframes up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  .toggle-track {
+    width: 40px; height: 22px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 11px; position: relative;
+    transition: background var(--transition);
+  }
 
-.out-hdr {
-  display:flex;align-items:center;justify-content:space-between;
-  flex-wrap:wrap;gap:8px;padding:10px 14px;
-  background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0;
-}
-.out-title { font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px }
-.out-ctrls { display:flex;gap:7px;flex-wrap:wrap }
+  .toggle-thumb {
+    position: absolute; top: 3px; left: 3px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform var(--transition), background var(--transition);
+  }
 
-/* ═══════════════════════════════════════════════════════════
-   DIFF TABLE  —  the key fixes:
-   • overflow-x:auto on each pane  → horizontal scroll, NO wrap
-   • white-space:pre on .cc        → code never breaks mid-line
-   • min-width:max-content on table → grows to fit longest line
-   • synchronized vertical scroll  → both panels move together
-   • stronger colours              → obvious at a glance
-   ═══════════════════════════════════════════════════════════ */
-.split-wrap { display:none;max-height:72vh;overflow:hidden }
-.split-wrap.on { display:flex }
+  [data-theme="light"] .toggle-thumb { transform: translateX(18px); background: var(--accent); }
 
-.diff-pane {
-  flex:1;min-width:0;
-  overflow-x:auto;
-  overflow-y:auto;
-  /* vertical sync done in JS */
-}
-.diff-pane + .diff-pane { border-left:2px solid var(--border) }
+  .options-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
 
-.pane-cap {
-  position:sticky;top:0;z-index:10;
-  padding:7px 14px;background:var(--surface2);
-  font-family:var(--mono);font-size:11px;font-weight:600;
-  letter-spacing:.4px;text-transform:uppercase;
-  border-bottom:1px solid var(--border);
-}
-.pane-cap.L { color:var(--del-fg);border-bottom-color:rgba(248,81,73,.35) }
-.pane-cap.R { color:var(--add-fg);border-bottom-color:rgba(63,185,80,.35) }
+  .option-group {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 4px;
+  }
 
-.dt {
-  border-collapse:collapse;
-  width:100%;
-  min-width:max-content;     /* ← never shrink; container scrolls horizontally */
-  font-family:var(--mono);
-  font-size:12.5px;
-  line-height:1.7;
-}
-.dt tr { vertical-align:top }
-.dt tr:hover td { filter:brightness(1.08) }
+  .opt-btn {
+    font-family: var(--font-mono); font-size: 11px; padding: 5px 12px;
+    border-radius: 4px; border: none; background: transparent;
+    color: var(--text-muted); cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+    white-space: nowrap;
+  }
 
-/* cells */
-.cn {                      /* line number */
-  width:52px;min-width:52px;
-  padding:1px 10px 1px 4px;
-  text-align:right;user-select:none;
-  color:var(--subtle);font-size:11px;
-  border-right:1px solid var(--border);
-}
-.cg {                      /* gutter +/- */
-  width:22px;min-width:22px;
-  text-align:center;padding:1px 0;
-  font-weight:700;
-  border-right:1px solid var(--border);
-}
-.cc {                      /* code */
-  padding:1px 16px;
-  white-space:pre;         /* ← NEVER wrap */
-  color:var(--text);
-}
+  .opt-btn.active { background: var(--accent); color: #fff; }
+  .opt-btn:hover:not(.active) { background: var(--surface2); color: var(--text); }
 
-/* added row — entire line is new */
-tr.ra     { background:var(--add-bg) }
-tr.ra .cn { background:var(--add-gutter);color:var(--add-fg) }
-tr.ra .cg { background:rgba(63,185,80,.18);color:var(--add-fg) }
+  .spacer { flex: 1; }
 
-/* removed row — entire line is gone */
-tr.rd     { background:var(--del-bg) }
-tr.rd .cn { background:var(--del-gutter);color:var(--del-fg) }
-tr.rd .cg { background:rgba(248,81,73,.18);color:var(--del-fg) }
+  .input-section { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
 
-/* paired word-diff rows: only some words changed — keep row bg very subtle */
-tr.ra-w     { background:rgba(63,185,80,.05) }
-tr.ra-w .cn { background:rgba(63,185,80,.10);color:var(--add-fg) }
-tr.ra-w .cg { background:rgba(63,185,80,.14);color:var(--add-fg) }
+  .input-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    display: flex; flex-direction: column;
+  }
 
-tr.rd-w     { background:rgba(248,81,73,.05) }
-tr.rd-w .cn { background:rgba(248,81,73,.10);color:var(--del-fg) }
-tr.rd-w .cg { background:rgba(248,81,73,.14);color:var(--del-fg) }
+  .input-panel:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 
-/* placeholder row (empty opposite) */
-tr.rp { opacity:.3;background:repeating-linear-gradient(
-  45deg,var(--surface2) 0px,var(--surface2) 4px,transparent 4px,transparent 8px
-)}
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; background: var(--surface2);
+    border-bottom: 1px solid var(--border); gap: 10px; flex-shrink: 0;
+  }
 
-/* WORD-LEVEL HIGHLIGHTS — vivid, primary signal on paired rows */
-.wa {
-  background:rgba(63,185,80,.32);
-  outline:1.5px solid rgba(63,185,80,.75);
-  border-radius:3px;
-  padding:0 2px;
-  color:#c3f0c8;
-}
-.wd {
-  background:rgba(248,81,73,.32);
-  outline:1.5px solid rgba(248,81,73,.75);
-  border-radius:3px;
-  padding:0 2px;
-  color:#ffc5c3;
-  text-decoration:line-through;
-  text-decoration-color:rgba(248,81,73,.55);
-}
+  .panel-label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--text-muted);
+  }
 
-/* UNIFIED */
-.uni-wrap { display:none;max-height:72vh;overflow:auto }
-.uni-wrap.on { display:block }
-.uni-wrap .dt { min-width:max-content }
-.uni-wrap .cn { width:80px;min-width:80px }
+  .panel-label .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.red { background: var(--red); }
+  .dot.green { background: var(--green); }
 
-/* EMPTY */
-.empty-s { padding:64px 20px;text-align:center;color:var(--muted) }
-.empty-s .ico { font-size:44px;margin-bottom:14px }
-.empty-s h3 { font-size:15px;color:var(--text);margin-bottom:6px }
-.empty-s p { font-size:12px;font-family:var(--mono) }
+  .panel-actions { display: flex; gap: 6px; }
 
-/* SCROLLBAR */
-::-webkit-scrollbar { width:7px;height:7px }
-::-webkit-scrollbar-track { background:var(--surface) }
-::-webkit-scrollbar-thumb { background:var(--border);border-radius:4px }
-::-webkit-scrollbar-thumb:hover { background:#484f58 }
+  .icon-btn {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-muted); border-radius: 5px; padding: 4px 8px;
+    font-size: 11px; cursor: pointer; font-family: var(--font-mono);
+    transition: all var(--transition);
+  }
 
-/* TOAST */
-.toast {
-  position:fixed;bottom:26px;right:26px;z-index:999;
-  background:var(--surface2);border:1px solid var(--border);
-  color:var(--text);padding:10px 16px;border-radius:6px;
-  font-size:13px;font-family:var(--mono);
-  box-shadow:0 6px 24px rgba(0,0,0,.4);
-  display:flex;align-items:center;gap:8px;
-  transform:translateY(70px);opacity:0;
-  transition:all .3s cubic-bezier(.34,1.56,.64,1);
-}
-.toast.show { transform:translateY(0);opacity:1 }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
 
-/* RESPONSIVE */
-@media(max-width:720px){
-  .inputs { grid-template-columns:1fr }
-  .split-wrap.on { flex-direction:column }
-  .diff-pane + .diff-pane { border-left:none;border-top:2px solid var(--border) }
-  .stats { margin-left:0 }
-  .actions { flex-direction:column;align-items:stretch }
-  .btn { justify-content:center }
-}
+  .text-input {
+    flex: 1; width: 100%; min-height: 240px; padding: 14px;
+    background: transparent; border: none; outline: none;
+    color: var(--text); font-family: var(--font-mono); font-size: 13px;
+    line-height: 1.7; resize: vertical; tab-size: 2;
+  }
+
+  .text-input::placeholder { color: var(--text-subtle); font-style: italic; }
+
+  .char-count {
+    padding: 6px 14px; font-size: 10px; color: var(--text-subtle);
+    font-family: var(--font-mono); border-top: 1px solid var(--border); flex-shrink: 0;
+  }
+
+  .action-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 20px; border-radius: var(--radius-sm);
+    font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+    cursor: pointer; border: none; transition: all var(--transition);
+    white-space: nowrap; letter-spacing: 0.2px;
+  }
+
+  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 14px var(--accent-glow); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--accent-glow); filter: brightness(1.1); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-ghost { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--border-hover); color: var(--text); background: var(--surface2); }
+
+  .btn-danger { background: var(--surface); color: var(--red); border: 1px solid var(--red-border); }
+  .btn-danger:hover { background: var(--red-bg); }
+
+  .stats-bar { display: flex; gap: 16px; margin-left: auto; flex-wrap: wrap; }
+
+  .stat-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); }
+  .stat-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .stat-dot.green { background: var(--green); }
+  .stat-dot.red { background: var(--red); }
+  .stat-dot.gray { background: var(--text-subtle); }
+  .stat-num { font-weight: 600; color: var(--text); }
+
+  .output-section {
+    display: none; flex-direction: column; gap: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    box-shadow: var(--shadow); animation: slideUp 0.3s ease;
+  }
+
+  .output-section.visible { display: flex; }
+
+  @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+  .output-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--surface2);
+    border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 10px; flex-shrink: 0;
+  }
+
+  .output-title {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--text-muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .output-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .split-view, .unified-view { display: none; width: 100%; }
+  .split-view.active, .unified-view.active { display: flex; }
+
+  .split-view { gap: 0; }
+
+  .diff-pane { flex: 1; overflow-x: auto; min-width: 0; }
+  .diff-pane:first-child { border-right: 1px solid var(--border); }
+
+  .pane-header {
+    padding: 8px 16px; font-size: 11px; font-family: var(--font-mono);
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border); background: var(--surface2); color: var(--text-muted);
+  }
+
+  .pane-header.left { color: var(--red); border-bottom-color: var(--red-border); }
+  .pane-header.right { color: var(--green); border-bottom-color: var(--green-border); }
+
+  .diff-content { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; overflow-x: auto; }
+
+  .diff-line { display: flex; align-items: stretch; min-height: 22px; transition: background 0.15s; }
+  .diff-line:hover { filter: brightness(1.1); }
+
+  .line-num {
+    min-width: 44px; text-align: right; padding: 2px 10px 2px 0;
+    color: var(--text-subtle); user-select: none;
+    border-right: 1px solid var(--border); font-size: 11px;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end;
+  }
+
+  .line-gutter {
+    width: 22px; text-align: center; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; border-right: 1px solid var(--border);
+  }
+
+  .line-text { padding: 2px 12px; white-space: pre-wrap; flex: 1; word-break: break-all; }
+
+  .diff-line.added { background: var(--green-bg); }
+  .diff-line.added .line-num { background: rgba(63,185,80,0.05); color: var(--green); }
+  .diff-line.added .line-gutter { background: rgba(63,185,80,0.15); color: var(--green); }
+
+  .diff-line.removed { background: var(--red-bg); }
+  .diff-line.removed .line-num { background: rgba(248,81,73,0.05); color: var(--red); }
+  .diff-line.removed .line-gutter { background: rgba(248,81,73,0.15); color: var(--red); }
+  .diff-line.removed .line-text { text-decoration: line-through; text-decoration-color: var(--red); }
+
+  .diff-line.unchanged .line-gutter { color: var(--text-subtle); }
+
+  /* Inline word highlights */
+  .word-added { background: rgba(63,185,80,0.35); border-radius: 2px; outline: 1px solid rgba(63,185,80,0.5); }
+  .word-removed { background: rgba(248,81,73,0.35); border-radius: 2px; outline: 1px solid rgba(248,81,73,0.5); }
+
+  .empty-state { padding: 60px 20px; text-align: center; color: var(--text-subtle); }
+  .empty-state .big-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-state h3 { font-size: 16px; color: var(--text-muted); margin-bottom: 8px; }
+  .empty-state p { font-size: 13px; font-family: var(--font-mono); }
+
+  .toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 12px 18px; border-radius: var(--radius-sm);
+    font-size: 13px; font-family: var(--font-mono); box-shadow: var(--shadow);
+    transform: translateY(80px); opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 1000; display: flex; align-items: center; gap: 8px;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+  @media (max-width: 768px) {
+    .input-section { grid-template-columns: 1fr; }
+    .split-view { flex-direction: column; }
+    .diff-pane:first-child { border-right: none; border-bottom: 1px solid var(--border); }
+    .stats-bar { margin-left: 0; }
+    .action-bar { flex-direction: column; align-items: stretch; }
+    .btn { justify-content: center; }
+    header { flex-direction: column; align-items: flex-start; }
+    .toast { left: 20px; right: 20px; bottom: 20px; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-<!-- HEADER -->
-<header>
-  <div class="logo">
-    <div class="logo-icon">⌥</div>
-    <div>
-      <h1>DiffScope</h1>
-      <p>text difference checker</p>
+<div class="app-wrapper">
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon">⌥</div>
+      <div class="logo-text">
+        <h1>DiffScope</h1>
+        <p>text difference checker</p>
+      </div>
     </div>
-  </div>
-  <div class="hdr-r">
-    <span class="badge live" id="liveBadge">realtime off</span>
-    <span class="badge">v3.1</span>
-    <label class="tog-wrap" onclick="toggleTheme()">
-      <div class="tog-track"><div class="tog-thumb"></div></div>
-      <span id="themeLbl">Light</span>
+    <div class="header-controls">
+      <span class="badge live" id="liveBadge">realtime off</span>
+      <span class="badge">v2.1</span>
+      <label class="theme-toggle" onclick="toggleTheme()">
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+        <span id="themeLabel">Light</span>
+      </label>
+    </div>
+  </header>
+
+  <div class="options-bar">
+    <div style="font-size:12px;color:var(--text-muted);font-weight:600;">View Mode:</div>
+    <div class="option-group">
+      <button class="opt-btn active" id="splitBtn" onclick="setViewMode('split')">⊞ Split</button>
+      <!-- <button class="opt-btn" id="unifiedBtn" onclick="setViewMode('unified')">≡ Unified</button> -->
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);font-weight:600;">Compare:</div>
+    <div class="option-group">
+      <button class="opt-btn active" id="lineBtn" onclick="setCompareMode('line')">Lines</button>
+      <button class="opt-btn" id="wordBtn" onclick="setCompareMode('word')">Words</button>
+      <!-- <button class="opt-btn" id="charBtn" onclick="setCompareMode('char')">Chars</button> -->
+    </div>
+    <div class="option-group">
+      <button class="opt-btn" id="realtimeBtn" onclick="toggleRealtime()">⚡ Realtime</button>
+    </div>
+    <div class="spacer"></div>
+    <label class="icon-btn" title="Upload file A">
+      📁 File A
+      <input type="file" accept=".txt,.md,.js,.css,.html,.json,.csv,.xml" style="display:none" onchange="loadFile(event,'a')">
+    </label>
+    <label class="icon-btn" title="Upload file B">
+      📁 File B
+      <input type="file" accept=".txt,.md,.js,.css,.html,.json,.csv,.xml" style="display:none" onchange="loadFile(event,'b')">
     </label>
   </div>
-</header>
 
-<!-- TOOLBAR -->
-<div class="toolbar">
-  <span class="tb-lbl">View</span>
-  <div class="seg">
-    <button class="sb on" id="bSplit"   onclick="setView('split')">⊞ Split</button>
-    <button class="sb"    id="bUnified" onclick="setView('unified')">≡ Unified</button>
+  <div class="input-section">
+    <div class="input-panel">
+      <div class="panel-header">
+        <div class="panel-label"><span class="dot red"></span> Original Text</div>
+        <div class="panel-actions">
+          <button class="icon-btn" onclick="clearPanel('a')">✕ Clear</button>
+          <button class="icon-btn" onclick="pasteFromClipboard('a')">⎘ Paste</button>
+        </div>
+      </div>
+      <textarea class="text-input" id="textA"
+        placeholder="Paste or type the original text here...&#10;&#10;Supports plain text, code, and any format.&#10;Click 'Compare' or enable realtime mode."
+        oninput="onInput('a')"></textarea>
+      <div class="char-count" id="countA">0 chars · 0 lines</div>
+    </div>
+
+    <div class="input-panel">
+      <div class="panel-header">
+        <div class="panel-label"><span class="dot green"></span> Modified Text</div>
+        <div class="panel-actions">
+          <button class="icon-btn" onclick="clearPanel('b')">✕ Clear</button>
+          <button class="icon-btn" onclick="pasteFromClipboard('b')">⎘ Paste</button>
+        </div>
+      </div>
+      <textarea class="text-input" id="textB"
+        placeholder="Paste or type the modified text here...&#10;&#10;Differences will be highlighted in&#10;green (added) and red (removed)."
+        oninput="onInput('b')"></textarea>
+      <div class="char-count" id="countB">0 chars · 0 lines</div>
+    </div>
   </div>
 
-  <span class="tb-lbl">Compare :</span>
-  <div class="seg">
-    <button class="sb on" id="bLine" onclick="setGrain('line')">Line</button>
-    <button class="sb"    id="bWord" onclick="setGrain('word')">Word</button>
-    <!-- <button class="sb"    id="bChar" onclick="setGrain('char')">Char</button> -->
+  <div class="action-bar">
+    <button class="btn btn-primary" onclick="runCompare()"><span>⚡</span> Compare</button>
+    <button class="btn btn-ghost" onclick="swapTexts()"><span>⇄</span> Swap</button>
+    <button class="btn btn-danger" onclick="resetAll()"><span>↺</span> Reset All</button>
+    <button class="btn btn-ghost" onclick="copyResult()"><span>⎘</span> Copy Result</button>
+    <div class="stats-bar" id="statsBar" style="display:none">
+      <div class="stat-item"><div class="stat-dot green"></div><span class="stat-num" id="statAdded">0</span> added</div>
+      <div class="stat-item"><div class="stat-dot red"></div><span class="stat-num" id="statRemoved">0</span> removed</div>
+      <div class="stat-item"><div class="stat-dot gray"></div><span class="stat-num" id="statUnchanged">0</span> unchanged</div>
+    </div>
   </div>
 
-  <button class="ibtn" id="bRT" onclick="toggleRT()">⚡ Realtime</button>
-
-  <div class="spacer"></div>
-
-  <button class="ibtn"><label>📁 File A<input type="file" accept=".txt,.md,.js,.ts,.css,.html,.json,.xml,.csv,.py" onchange="loadFile(event,'A')"></label></button>
-  <button class="ibtn"><label>📁 File B<input type="file" accept=".txt,.md,.js,.ts,.css,.html,.json,.xml,.csv,.py" onchange="loadFile(event,'B')"></label></button>
-</div>
-
-<!-- INPUTS -->
-<div class="inputs">
-  <div class="inp-panel">
-    <div class="inp-hdr">
-      <div class="inp-lbl"><span class="dot r"></span> Original</div>
-      <div class="inp-acts">
-        <button class="ibtn" onclick="clearTA('A')">✕ Clear</button>
-        <button class="ibtn" onclick="doPaste('A')">⎘ Paste</button>
+  <div class="output-section" id="outputSection">
+    <div class="output-header">
+      <div class="output-title"><span>◈</span> Diff Output</div>
+      <div class="output-controls">
+        <button class="icon-btn" onclick="expandAll()">⊞ Expand All</button>
+        <button class="icon-btn" onclick="collapseUnchanged()">⊟ Collapse Unchanged</button>
       </div>
     </div>
-    <textarea class="code" id="textA"
-      placeholder="Paste original text here…&#10;&#10;• Any plain text, HTML, code, config, etc.&#10;• Enable Realtime for instant diff-as-you-type."
-      oninput="onInput('A')"></textarea>
-    <div class="inp-foot" id="cntA">0 chars · 0 lines</div>
-  </div>
 
-  <div class="inp-panel">
-    <div class="inp-hdr">
-      <div class="inp-lbl"><span class="dot g"></span> Modified</div>
-      <div class="inp-acts">
-        <button class="ibtn" onclick="clearTA('B')">✕ Clear</button>
-        <button class="ibtn" onclick="doPaste('B')">⎘ Paste</button>
+    <div class="split-view active" id="splitView">
+      <div class="diff-pane">
+        <div class="pane-header left">— Original</div>
+        <div class="diff-content" id="leftPane"></div>
+      </div>
+      <div class="diff-pane">
+        <div class="pane-header right">+ Modified</div>
+        <div class="diff-content" id="rightPane"></div>
       </div>
     </div>
-    <textarea class="code" id="textB"
-      placeholder="Paste modified text here…&#10;&#10;Differences shown as:&#10;  ▸ green row  = line added&#10;  ▸ red row    = line removed&#10;  ▸ underline  = exact word changed"
-      oninput="onInput('B')"></textarea>
-    <div class="inp-foot" id="cntB">0 chars · 0 lines</div>
-  </div>
-</div>
 
-<!-- ACTIONS -->
-<div class="actions">
-  <button class="btn btn-p" onclick="runCompare()">⚡ Compare</button>
-  <button class="btn btn-g" onclick="swapTexts()">⇄ Swap</button>
-  <button class="btn btn-d" onclick="resetAll()">↺ Reset</button>
-  <!-- <button class="btn btn-g" onclick="copyResult()">⎘ Copy Diff</button> -->
-  <button class="btn btn-g" onclick="collapseToggle()" id="bCollapse">⊟ Hide Unchanged</button>
-
-  <div class="stats" id="stats">
-    <div class="stat"><span class="st-dot g"></span><strong id="sAdd">0</strong>&nbsp;added</div>
-    <div class="stat"><span class="st-dot r"></span><strong id="sDel">0</strong>&nbsp;removed</div>
-    <div class="stat"><span class="st-dot u"></span><strong id="sUn">0</strong>&nbsp;unchanged</div>
-  </div>
-</div>
-
-<!-- OUTPUT -->
-<div class="output" id="output">
-  <div class="out-hdr">
-    <div class="out-title">◈ Diff Output</div>
-    <!-- <div class="out-ctrls">
-      <button class="ibtn" onclick="collapseToggle()">Toggle unchanged</button>
-      <button class="ibtn" onclick="copyResult()">⎘ Copy</button>
-    </div> -->
-  </div>
-
-  <!-- SPLIT VIEW -->
-  <div class="split-wrap on" id="splitWrap">
-    <div class="diff-pane" id="paneL" onscroll="syncScroll(this,'paneR')">
-      <div class="pane-cap L">— Original</div>
-      <table class="dt" id="tL"><tbody></tbody></table>
-    </div>
-    <div class="diff-pane" id="paneR" onscroll="syncScroll(this,'paneL')">
-      <div class="pane-cap R">+ Modified</div>
-      <table class="dt" id="tR"><tbody></tbody></table>
+    <div class="unified-view" id="unifiedView">
+      <div class="diff-content" id="unifiedPane" style="width:100%"></div>
     </div>
   </div>
-
-  <!-- UNIFIED VIEW -->
-  <div class="uni-wrap" id="uniWrap">
-    <table class="dt" id="tU"><tbody></tbody></table>
-  </div>
 </div>
 
-</div><!-- /wrap -->
-
-<div class="toast" id="toast"><span id="tIco">✓</span><span id="tMsg">Done</span></div>
+<div class="toast" id="toast">
+  <span id="toastIcon">✓</span>
+  <span id="toastMsg">Copied!</span>
+</div>
 
 <script>
-/* ── STATE ───────────────────────────────────────── */
-let viewMode  = 'split';
-let grain     = 'line';
-let rtMode    = false;
-let rtTimer   = null;
-let lastDiff  = null;
-let collapsed = false;
-let syncLock  = false;
+let viewMode = 'split';
+let compareMode = 'line';
+let realtimeMode = false;
+let realtimeTimer = null;
+let lastDiffResult = null;
+let collapsedMode = false;
 
-/* ── SCROLL SYNC ─────────────────────────────────── */
-function syncScroll(src, tid) {
-  if (syncLock) return;
-  syncLock = true;
-  const t = document.getElementById(tid);
-  t.scrollTop  = src.scrollTop;
-  t.scrollLeft = src.scrollLeft;
-  requestAnimationFrame(() => { syncLock = false; });
+function updateCount(side) {
+  const ta = document.getElementById('text' + side.toUpperCase());
+  const counter = document.getElementById('count' + side.toUpperCase());
+  const text = ta.value;
+  counter.textContent = `${text.length.toLocaleString()} chars · ${(text ? text.split('\n').length : 0).toLocaleString()} lines`;
 }
 
-/* ── UTILS ───────────────────────────────────────── */
-const $ = id => document.getElementById(id);
-
-function esc(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function toast(msg, ico='✓') {
-  const el = $('toast');
-  $('tMsg').textContent = msg;
-  $('tIco').textContent = ico;
+function toast(msg, icon = '✓') {
+  const el = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  document.getElementById('toastIcon').textContent = icon;
   el.classList.add('show');
-  clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove('show'), 2400);
-}
-
-function updCount(side) {
-  const v = $('text'+side).value;
-  $('cnt'+side).textContent =
-    `${v.length.toLocaleString()} chars · ${(v ? v.split('\n').length : 0).toLocaleString()} lines`;
+  setTimeout(() => el.classList.remove('show'), 2200);
 }
 
 function onInput(side) {
-  updCount(side);
-  if (rtMode) { clearTimeout(rtTimer); rtTimer = setTimeout(runCompare, 400); }
+  updateCount(side);
+  if (realtimeMode) { clearTimeout(realtimeTimer); realtimeTimer = setTimeout(runCompare, 400); }
 }
 
-/* ── CONTROLS ────────────────────────────────────── */
 function toggleTheme() {
-  const h = document.documentElement;
-  const li = h.getAttribute('data-theme')==='light';
-  h.setAttribute('data-theme', li ? 'dark' : 'light');
-  $('themeLbl').textContent = li ? 'Light' : 'Dark';
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? 'dark' : 'light');
+  document.getElementById('themeLabel').textContent = isLight ? 'Light' : 'Dark';
 }
 
-function setView(v) {
-  viewMode = v;
-  $('bSplit').classList.toggle('on', v==='split');
-  $('bUnified').classList.toggle('on', v==='unified');
-  $('splitWrap').classList.toggle('on',  v==='split');
-  $('uniWrap').classList.toggle('on',    v==='unified');
-  if (lastDiff) renderDiff(lastDiff);
+function toggleRealtime() {
+  realtimeMode = !realtimeMode;
+  document.getElementById('realtimeBtn').classList.toggle('active', realtimeMode);
+  document.getElementById('liveBadge').textContent = realtimeMode ? 'realtime on' : 'realtime off';
+  if (realtimeMode) runCompare();
+  toast(realtimeMode ? 'Realtime mode ON' : 'Realtime mode OFF', realtimeMode ? '⚡' : '○');
 }
 
-function setGrain(g) {
-  grain = g;
-  ['Line','Word','Char'].forEach(x =>
-    $('b'+x).classList.toggle('on', x.toLowerCase()===g));
-  if (lastDiff) runCompare();
+function setViewMode(mode) {
+  viewMode = mode;
+  document.getElementById('splitBtn').classList.toggle('active', mode === 'split');
+  document.getElementById('unifiedBtn').classList.toggle('active', mode === 'unified');
+  document.getElementById('splitView').classList.toggle('active', mode === 'split');
+  document.getElementById('unifiedView').classList.toggle('active', mode === 'unified');
+  if (lastDiffResult) renderDiff(lastDiffResult);
 }
 
-function toggleRT() {
-  rtMode = !rtMode;
-  $('bRT').classList.toggle('on', rtMode);
-  $('liveBadge').textContent = rtMode ? 'realtime on' : 'realtime off';
-  if (rtMode) runCompare();
-  toast(rtMode ? 'Realtime ON' : 'Realtime OFF', rtMode ? '⚡' : '○');
+function setCompareMode(mode) {
+  compareMode = mode;
+  ['line','word','char'].forEach(m => document.getElementById(m + 'Btn').classList.toggle('active', m === mode));
+  if (document.getElementById('outputSection').classList.contains('visible')) runCompare();
 }
 
-function clearTA(side) {
-  $('text'+side).value = '';
-  updCount(side);
-  if (rtMode) runCompare();
-}
-
-async function doPaste(side) {
-  try {
-    const t = await navigator.clipboard.readText();
-    $('text'+side).value = t;
-    updCount(side);
-    if (rtMode) runCompare();
-    toast('Pasted', '⎘');
-  } catch { toast('Clipboard denied', '✕'); }
-}
-
-function loadFile(e, side) {
-  const f = e.target.files[0]; if (!f) return;
-  const r = new FileReader();
-  r.onload = ev => {
-    $('text'+side).value = ev.target.result;
-    updCount(side);
-    if (rtMode) runCompare();
-    toast(`Loaded: ${f.name}`, '📁');
-  };
-  r.readAsText(f);
-  e.target.value = '';
+function clearPanel(side) {
+  document.getElementById('text' + side.toUpperCase()).value = '';
+  updateCount(side);
+  if (realtimeMode) runCompare();
 }
 
 function swapTexts() {
-  const a = $('textA'), b = $('textB');
+  const a = document.getElementById('textA'), b = document.getElementById('textB');
   [a.value, b.value] = [b.value, a.value];
-  updCount('A'); updCount('B');
-  if (rtMode || lastDiff) runCompare();
-  toast('Swapped', '⇄');
+  updateCount('a'); updateCount('b');
+  if (realtimeMode || document.getElementById('outputSection').classList.contains('visible')) runCompare();
+  toast('Texts swapped', '⇄');
 }
 
 function resetAll() {
-  $('textA').value = ''; $('textB').value = '';
-  updCount('A'); updCount('B');
-  $('output').classList.remove('on');
-  $('stats').style.display = 'none';
-  lastDiff = null; collapsed = false;
-  toast('Reset', '↺');
+  document.getElementById('textA').value = '';
+  document.getElementById('textB').value = '';
+  updateCount('a'); updateCount('b');
+  document.getElementById('outputSection').classList.remove('visible');
+  document.getElementById('statsBar').style.display = 'none';
+  lastDiffResult = null;
+  toast('Reset complete', '↺');
 }
 
-function collapseToggle() {
-  collapsed = !collapsed;
-  $('bCollapse').textContent = collapsed ? '⊞ Show Unchanged' : '⊟ Hide Unchanged';
-  if (lastDiff) renderDiff(lastDiff);
-  toast(collapsed ? 'Unchanged hidden' : 'Unchanged shown');
+async function pasteFromClipboard(side) {
+  try {
+    const text = await navigator.clipboard.readText();
+    document.getElementById('text' + side.toUpperCase()).value = text;
+    updateCount(side);
+    if (realtimeMode) runCompare();
+    toast('Pasted from clipboard', '⎘');
+  } catch { toast('Clipboard access denied', '✕'); }
+}
+
+function loadFile(evt, side) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('text' + side.toUpperCase()).value = e.target.result;
+    updateCount(side);
+    if (realtimeMode) runCompare();
+    toast(`Loaded: ${file.name}`, '📁');
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
 }
 
 function copyResult() {
-  if (!lastDiff) { toast('Nothing to copy', '✕'); return; }
-  const txt = lastDiff.map(d =>
-    d.type==='added'?'+ '+d.value : d.type==='removed'?'- '+d.value : '  '+d.value
+  if (!lastDiffResult) { toast('Nothing to copy yet', '✕'); return; }
+  const lines = lastDiffResult.map(d =>
+    d.type === 'added' ? '+ ' + d.value : d.type === 'removed' ? '- ' + d.value : '  ' + d.value
   ).join('\n');
-  navigator.clipboard.writeText(txt).then(() => toast('Copied!', '⎘'));
+  navigator.clipboard.writeText(lines).then(() => toast('Diff copied!', '⎘'));
 }
 
-/* ── LCS DIFF ────────────────────────────────────── */
+function expandAll() { collapsedMode = false; if (lastDiffResult) renderDiff(lastDiffResult); }
+function collapseUnchanged() { collapsedMode = true; if (lastDiffResult) renderDiff(lastDiffResult); }
+
+// ============================================================
+// LCS DIFF
+// ============================================================
 function lcs(a, b) {
-  const m=a.length, n=b.length;
-  if (m*n > 120000) return fastDiff(a,b);
-  const dp = Array.from({length:m+1},()=>new Int32Array(n+1));
-  for (let i=1;i<=m;i++) for (let j=1;j<=n;j++)
-    dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j],dp[i][j-1]);
-  const res=[]; let i=m,j=n;
-  while(i>0&&j>0){
-    if(a[i-1]===b[j-1]){res.unshift({type:'unchanged',value:a[i-1]});i--;j--;}
-    else if(dp[i-1][j]>=dp[i][j-1]){res.unshift({type:'removed',value:a[i-1]});i--;}
-    else{res.unshift({type:'added',value:b[j-1]});j--;}
+  const m = a.length, n = b.length;
+  if (m * n > 100000) return simpleDiff(a, b);
+  const dp = Array.from({length: m + 1}, () => new Int32Array(n + 1));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  const result = [];
+  let i = m, j = n;
+  while (i > 0 && j > 0) {
+    if (a[i-1] === b[j-1]) { result.unshift({type:'unchanged', value:a[i-1]}); i--; j--; }
+    else if (dp[i-1][j] > dp[i][j-1]) { result.unshift({type:'removed', value:a[i-1]}); i--; }
+    else { result.unshift({type:'added', value:b[j-1]}); j--; }
   }
-  while(i>0){res.unshift({type:'removed',value:a[i-1]});i--;}
-  while(j>0){res.unshift({type:'added',value:b[j-1]});j--;}
-  return res;
+  while (i > 0) { result.unshift({type:'removed', value:a[i-1]}); i--; }
+  while (j > 0) { result.unshift({type:'added', value:b[j-1]}); j--; }
+  return result;
 }
 
-function fastDiff(a,b){
-  const res=[]; let ai=0,bi=0;
-  while(ai<a.length&&bi<b.length){
-    if(a[ai]===b[bi]){res.push({type:'unchanged',value:a[ai]});ai++;bi++;}
-    else{
-      const ia=b.indexOf(a[ai],bi),ib=a.indexOf(b[bi],ai);
-      if(ia===-1&&ib===-1){res.push({type:'removed',value:a[ai++]});res.push({type:'added',value:b[bi++]});}
-      else if(ib===-1||(ia!==-1&&ia<=ib)) res.push({type:'added',value:b[bi++]});
-      else res.push({type:'removed',value:a[ai++]});
+function simpleDiff(a, b) {
+  const result = [];
+  let ai = 0, bi = 0;
+  while (ai < a.length && bi < b.length) {
+    if (a[ai] === b[bi]) { result.push({type:'unchanged', value:a[ai]}); ai++; bi++; }
+    else {
+      let foundA = b.indexOf(a[ai], bi), foundB = a.indexOf(b[bi], ai);
+      if (foundA === -1 && foundB === -1) { result.push({type:'removed',value:a[ai++]}); result.push({type:'added',value:b[bi++]}); }
+      else if (foundB === -1 || (foundA !== -1 && foundA <= foundB)) { result.push({type:'added',value:b[bi++]}); }
+      else { result.push({type:'removed',value:a[ai++]}); }
     }
   }
-  while(ai<a.length) res.push({type:'removed',value:a[ai++]});
-  while(bi<b.length) res.push({type:'added',value:b[bi++]});
-  return res;
+  while (ai < a.length) result.push({type:'removed',value:a[ai++]});
+  while (bi < b.length) result.push({type:'added',value:b[bi++]});
+  return result;
 }
 
-function getDiff(tA,tB){
-  if(grain==='line') return lcs(tA.split('\n'),    tB.split('\n'));
-  if(grain==='word') return lcs(tA.split(/(\s+)/), tB.split(/(\s+)/));
-  return lcs([...tA],[...tB]);
-}
+function diffLines(textA, textB) { return lcs(textA.split('\n'), textB.split('\n')); }
+function diffWords(textA, textB) { return lcs(textA.split(/(\s+)/), textB.split(/(\s+)/)); }
+function diffChars(textA, textB) { return lcs([...textA], [...textB]); }
 
-/* ── INLINE WORD DIFF ────────────────────────────── */
-// Returns TWO strings: [leftHtml, rightHtml]
-// Left  = oldLine reconstructed, with removed words highlighted red
-// Right = newLine reconstructed, with added words highlighted green
-// Neither side ever contains the other side's unique words.
-function wordDiffPair(oldL, newL){
-  const aw = oldL.split(/(\s+)/);
-  const bw = newL.split(/(\s+)/);
-  const d  = lcs(aw, bw);
-
-  let leftHtml  = '';
-  let rightHtml = '';
-
-  for (const x of d) {
-    const s = esc(x.value);
-    if (x.type === 'unchanged') {
-      leftHtml  += s;   // present on both sides, plain
-      rightHtml += s;
-    } else if (x.type === 'removed') {
-      leftHtml  += `<span class="wd">${s}</span>`;
-      // do NOT add to rightHtml — this word doesn't exist on the right
-    } else {             // added
-      rightHtml += `<span class="wa">${s}</span>`;
-      // do NOT add to leftHtml — this word doesn't exist on the left
+// ============================================================
+// INLINE WORD DIFF — FIX: skip tokens that don't belong in this pane
+// Left pane (type='removed'): show unchanged + highlight removed words, SKIP added words
+// Right pane (type='added'): show unchanged + highlight added words, SKIP removed words
+// ============================================================
+function inlineWordDiff(oldLine, newLine, pane) {
+  const diff = lcs(oldLine.split(/(\s+)/), newLine.split(/(\s+)/));
+  let html = '';
+  for (const d of diff) {
+    const esc = escHtml(d.value);
+    if (d.type === 'unchanged') {
+      html += esc;
+    } else if (d.type === 'removed' && pane === 'removed') {
+      // Show on left pane only — highlight as removed
+      html += `<span class="word-removed">${esc}</span>`;
+    } else if (d.type === 'added' && pane === 'added') {
+      // Show on right pane only — highlight as added
+      html += `<span class="word-added">${esc}</span>`;
     }
+    // If d.type === 'removed' and pane === 'added': skip (don't show old words in new pane)
+    // If d.type === 'added' and pane === 'removed': skip (don't show new words in old pane)
   }
-
-  return [leftHtml, rightHtml];
+  return html;
 }
 
-/* ── MAIN COMPARE ────────────────────────────────── */
-function runCompare(){
-  const tA=$('textA').value, tB=$('textB').value;
-  if(!tA&&!tB){
-    $('output').classList.remove('on');
-    $('stats').style.display='none';
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ============================================================
+// MAIN COMPARE
+// ============================================================
+function runCompare() {
+  const textA = document.getElementById('textA').value;
+  const textB = document.getElementById('textB').value;
+  if (!textA && !textB) {
+    document.getElementById('outputSection').classList.remove('visible');
+    document.getElementById('statsBar').style.display = 'none';
     return;
   }
-  const diff=getDiff(tA,tB);
-  lastDiff=diff;
-  $('sAdd').textContent=diff.filter(d=>d.type==='added').length;
-  $('sDel').textContent=diff.filter(d=>d.type==='removed').length;
-  $('sUn').textContent =diff.filter(d=>d.type==='unchanged').length;
-  $('stats').style.display='flex';
-  $('output').classList.add('on');
+  let diff;
+  if (compareMode === 'line') diff = diffLines(textA, textB);
+  else if (compareMode === 'word') diff = diffWords(textA, textB);
+  else diff = diffChars(textA, textB);
+  lastDiffResult = diff;
+
+  const added = diff.filter(d => d.type === 'added').length;
+  const removed = diff.filter(d => d.type === 'removed').length;
+  const unchanged = diff.filter(d => d.type === 'unchanged').length;
+  document.getElementById('statAdded').textContent = added;
+  document.getElementById('statRemoved').textContent = removed;
+  document.getElementById('statUnchanged').textContent = unchanged;
+  document.getElementById('statsBar').style.display = 'flex';
+  document.getElementById('outputSection').classList.add('visible');
   renderDiff(diff);
 }
 
-/* ── RENDER ──────────────────────────────────────── */
-function renderDiff(diff){
-  if(viewMode==='split') renderSplit(diff);
+function renderDiff(diff) {
+  if (viewMode === 'split') renderSplit(diff);
   else renderUnified(diff);
 }
 
-/* helper: one table row */
-function row(cls,num,g,code){
-  return `<tr class="${cls}"><td class="cn">${num}</td><td class="cg">${g}</td><td class="cc">${code}</td></tr>`;
+function buildDiffLine(lineNum, gutter, text, type) {
+  const numHtml = lineNum !== null ? `<span class="line-num">${lineNum}</span>` : `<span class="line-num"></span>`;
+  return `<div class="diff-line ${type}">${numHtml}<span class="line-gutter">${gutter}</span><span class="line-text">${text}</span></div>`;
 }
 
-function renderSplit(diff){
-  let L='', R='', ln=1, rn=1, i=0;
-  const EMPTY_ROW = row('rp','','','');
+function renderSplit(diff) {
+  let leftHtml = '', rightHtml = '';
+  let leftNum = 1, rightNum = 1;
+  let i = 0;
 
-  while(i<diff.length){
-    const d=diff[i];
+  while (i < diff.length) {
+    const d = diff[i];
 
-    if(d.type==='unchanged'){
-      if(collapsed){i++;ln++;rn++;continue;}
-      const s=esc(d.value);
-      L += row('',ln,' ',s);
-      R += row('',rn,' ',s);
-      ln++;rn++;
+    if (d.type === 'unchanged') {
+      if (collapsedMode) { i++; leftNum++; rightNum++; continue; }
+      const esc = escHtml(d.value);
+      leftHtml += buildDiffLine(leftNum, ' ', esc, 'unchanged');
+      rightHtml += buildDiffLine(rightNum, ' ', esc, 'unchanged');
+      leftNum++; rightNum++;
 
-    } else if(d.type==='removed'){
-      const nxt=diff[i+1];
-      if(nxt&&nxt.type==='added'&&grain==='line'){
-        // Paired removed+added → inline word diff
-        // Use subtle row class (rd-w / ra-w) so word highlights are the focus
-        const [lHtml, rHtml] = wordDiffPair(d.value, nxt.value);
-        L += row('rd-w',ln,'−',lHtml);
-        R += row('ra-w',rn,'+',rHtml);
-        ln++;rn++;i+=2;continue;
+    } else if (d.type === 'removed') {
+      const next = diff[i + 1];
+      if (next && next.type === 'added' && compareMode === 'line') {
+        // Paired change: show word-level diff, each pane only shows its own words
+        leftHtml += buildDiffLine(leftNum, '−', inlineWordDiff(d.value, next.value, 'removed'), 'removed');
+        rightHtml += buildDiffLine(rightNum, '+', inlineWordDiff(d.value, next.value, 'added'), 'added');
+        leftNum++; rightNum++; i += 2; continue;
       }
-      L += row('rd',ln,'−',esc(d.value));
-      R += EMPTY_ROW;
-      ln++;
+      leftHtml += buildDiffLine(leftNum, '−', escHtml(d.value), 'removed');
+      rightHtml += buildDiffLine(null, '', '&nbsp;', 'unchanged');
+      leftNum++;
 
-    } else { /* added */
-      L += EMPTY_ROW;
-      R += row('ra',rn,'+',esc(d.value));
-      rn++;
+    } else if (d.type === 'added') {
+      leftHtml += buildDiffLine(null, '', '&nbsp;', 'unchanged');
+      rightHtml += buildDiffLine(rightNum, '+', escHtml(d.value), 'added');
+      rightNum++;
     }
     i++;
   }
 
-  const SAME=`<tr><td colspan="3"><div class="empty-s"><div class="ico">✓</div><h3>Texts are identical</h3><p>No differences found</p></div></td></tr>`;
-  if(!L){L=SAME;R=SAME;}
-  $('tL').querySelector('tbody').innerHTML=L;
-  $('tR').querySelector('tbody').innerHTML=R;
+  if (!leftHtml && !rightHtml) {
+    const same = `<div class="empty-state"><div class="big-icon">✓</div><h3>Texts are identical</h3><p>No differences found.</p></div>`;
+    leftHtml = same; rightHtml = same;
+  }
+
+  document.getElementById('leftPane').innerHTML = leftHtml;
+  document.getElementById('rightPane').innerHTML = rightHtml;
 }
 
-function renderUnified(diff){
-  let rows='', ln=1, rn=1, i=0;
-  while(i<diff.length){
-    const d=diff[i];
-    if(d.type==='unchanged'){
-      if(collapsed){ln++;rn++;i++;continue;}
-      rows+=row('',`${ln}&nbsp;${rn}`,' ',esc(d.value));
-      ln++;rn++;
-    } else if(d.type==='removed'){
-      const nxt=diff[i+1];
-      if(nxt&&nxt.type==='added'&&grain==='line'){
-        // Paired: show word-level highlights with subtle row bg
-        const [lHtml,rHtml]=wordDiffPair(d.value,nxt.value);
-        rows+=row('rd-w',`${ln}&nbsp;`,  '−',lHtml);
-        rows+=row('ra-w',`&nbsp;${rn}`,  '+',rHtml);
-        ln++;rn++;i+=2;continue;
-      }
-      rows+=row('rd',ln,'−',esc(d.value));ln++;
-    } else {
-      rows+=row('ra',rn,'+',esc(d.value));rn++;
+function renderUnified(diff) {
+  let html = '';
+  let leftNum = 1, rightNum = 1;
+
+  for (const d of diff) {
+    if (d.type === 'unchanged') {
+      if (collapsedMode) { leftNum++; rightNum++; continue; }
+      html += `<div class="diff-line unchanged">
+        <span class="line-num" style="min-width:80px;text-align:right;padding-right:10px;">${leftNum}&nbsp;&nbsp;${rightNum}</span>
+        <span class="line-gutter"> </span>
+        <span class="line-text">${escHtml(d.value)}</span>
+      </div>`;
+      leftNum++; rightNum++;
+    } else if (d.type === 'removed') {
+      html += `<div class="diff-line removed">
+        <span class="line-num" style="min-width:80px;text-align:right;padding-right:10px;">${leftNum}&nbsp;&nbsp;&nbsp;</span>
+        <span class="line-gutter">−</span>
+        <span class="line-text">${escHtml(d.value)}</span>
+      </div>`;
+      leftNum++;
+    } else if (d.type === 'added') {
+      html += `<div class="diff-line added">
+        <span class="line-num" style="min-width:80px;text-align:right;padding-right:10px;">&nbsp;&nbsp;&nbsp;${rightNum}</span>
+        <span class="line-gutter">+</span>
+        <span class="line-text">${escHtml(d.value)}</span>
+      </div>`;
+      rightNum++;
     }
-    i++;
   }
-  if(!rows) rows=`<tr><td colspan="3"><div class="empty-s"><div class="ico">✓</div><h3>Texts are identical</h3><p>No differences found</p></div></td></tr>`;
-  $('tU').querySelector('tbody').innerHTML=rows;
+
+  document.getElementById('unifiedPane').innerHTML = html || `<div class="empty-state"><div class="big-icon">✓</div><h3>Texts are identical</h3><p>No differences found.</p></div>`;
 }
 </script>
 </body>
