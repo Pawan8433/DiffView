@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DiffScope — Text Difference Checker</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ─────────────────────────────────────────────── */
+:root {
+  --bg:          #0d1117;
+  --surface:     #161b22;
+  --surface2:    #1c2128;
+  --border:      #30363d;
+  --border2:     #21262d;
+  --text:        #e6edf3;
+  --muted:       #7d8590;
+  --subtle:      #3d444d;
+  --accent:      #58a6ff;
+  --accent-dim:  rgba(88,166,255,.12);
+
+  /* STRONG diff colours — key fix for readability */
+  --add-bg:      #0d2818;
+  --add-gutter:  #1a4a28;
+  --add-fg:      #56d364;
+  --add-word:    rgba(86,211,100,.40);
+  --add-word-bd: #3fb950;
+
+  --del-bg:      #2d0f0f;
+  --del-gutter:  #5c1a1a;
+  --del-fg:      #ff7b72;
+  --del-word:    rgba(255,123,114,.40);
+  --del-word-bd: #f85149;
+
+  --radius:8px;
+  --mono:'JetBrains Mono','Fira Code','Consolas',monospace;
+  --ui:'Syne',sans-serif;
+  --t:.18s ease;
+}
+[data-theme="light"] {
+  --bg:#f3f4f6; --surface:#fff; --surface2:#f6f8fa;
+  --border:#d0d7de; --border2:#e8ebee; --text:#1f2328;
+  --muted:#57606a; --subtle:#d0d7de;
+  --accent:#0969da; --accent-dim:rgba(9,105,218,.08);
+  --add-bg:#e6ffec; --add-gutter:#ccffd8; --add-fg:#116329;
+  --add-word:rgba(17,99,41,.22); --add-word-bd:#2da44e;
+  --del-bg:#ffebe9; --del-gutter:#ffd7d5; --del-fg:#82071e;
+  --del-word:rgba(130,7,30,.22); --del-word-bd:#cf222e;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+button{font-family:inherit;cursor:pointer}
+textarea{font-family:inherit}
+
+body {
+  background:var(--bg);color:var(--text);font-family:var(--ui);
+  min-height:100vh;transition:background var(--t),color var(--t);
+}
+body::before {
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(var(--border) 1px,transparent 1px),
+    linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:48px 48px;opacity:.07;
+}
+.wrap { position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:22px 18px 80px }
+
+/* HEADER */
+header {
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:14px;
+  margin-bottom:24px;padding-bottom:18px;
+  border-bottom:1px solid var(--border);
+}
+.logo { display:flex;align-items:center;gap:12px }
+.logo-icon {
+  width:40px;height:40px;border-radius:8px;
+  background:linear-gradient(135deg,#58a6ff,#a371f7);
+  display:grid;place-items:center;font-size:18px;flex-shrink:0;
+  box-shadow:0 0 18px rgba(88,166,255,.25);
+}
+.logo h1 { font-size:20px;font-weight:800;letter-spacing:-.3px;line-height:1 }
+.logo p  { font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:3px }
+.hdr-r  { display:flex;align-items:center;gap:10px;flex-wrap:wrap }
+
+.badge {
+  font-family:var(--mono);font-size:11px;
+  padding:3px 9px;border-radius:20px;
+  border:1px solid var(--border);color:var(--muted);background:var(--surface);
+}
+.badge.live { border-color:rgba(63,185,80,.4);color:#3fb950;background:rgba(63,185,80,.08) }
+.badge.live::before { content:'● ';animation:blink 1.4s infinite }
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+.tog-wrap { display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;font-size:12px;color:var(--muted) }
+.tog-track { width:38px;height:20px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);position:relative;transition:background var(--t) }
+.tog-thumb { position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:var(--muted);transition:transform var(--t),background var(--t) }
+[data-theme="light"] .tog-thumb { transform:translateX(18px);background:var(--accent) }
+
+/* TOOLBAR */
+.toolbar { display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px }
+.tb-lbl { font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase }
+.seg { display:flex;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px;gap:2px }
+.sb {
+  font-family:var(--mono);font-size:11px;font-weight:500;
+  padding:5px 13px;border-radius:4px;border:none;
+  background:transparent;color:var(--muted);
+  transition:background var(--t),color var(--t);white-space:nowrap;
+}
+.sb.on { background:var(--accent);color:#fff }
+.sb:hover:not(.on) { background:var(--surface2);color:var(--text) }
+.spacer { flex:1 }
+
+.ibtn {
+  font-family:var(--mono);font-size:11px;
+  padding:5px 11px;border-radius:5px;
+  border:1px solid var(--border);
+  background:var(--surface);color:var(--muted);
+  transition:all var(--t);white-space:nowrap;
+}
+.ibtn:hover { border-color:var(--accent);color:var(--accent);background:var(--accent-dim) }
+.ibtn label { cursor:pointer }
+.ibtn input[type=file] { display:none }
+
+/* INPUTS */
+.inputs { display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px }
+.inp-panel {
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:border-color var(--t),box-shadow var(--t);
+}
+.inp-panel:focus-within { border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim) }
+.inp-hdr {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border);gap:8px;
+}
+.inp-lbl { display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase }
+.dot { width:8px;height:8px;border-radius:50%;flex-shrink:0 }
+.dot.r { background:var(--del-fg) }
+.dot.g { background:var(--add-fg) }
+.inp-acts { display:flex;gap:5px }
+
+textarea.code {
+  flex:1;width:100%;min-height:220px;
+  padding:12px 14px;background:transparent;border:none;outline:none;
+  color:var(--text);font-family:var(--mono);font-size:12.5px;line-height:1.75;
+  resize:vertical;tab-size:2;
+}
+textarea.code::placeholder { color:var(--subtle);font-style:italic }
+.inp-foot { padding:5px 13px;font-size:10px;font-family:var(--mono);color:var(--subtle);border-top:1px solid var(--border2) }
+
+/* ACTIONS */
+.actions { display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:22px }
+.btn {
+  display:inline-flex;align-items:center;gap:7px;
+  padding:9px 18px;border-radius:6px;
+  font-family:var(--ui);font-size:13px;font-weight:700;
+  border:none;transition:all var(--t);white-space:nowrap;
+}
+.btn-p { background:var(--accent);color:#fff;box-shadow:0 3px 12px rgba(88,166,255,.3) }
+.btn-p:hover { filter:brightness(1.1);transform:translateY(-1px) }
+.btn-p:active { transform:none }
+.btn-g { background:var(--surface);color:var(--muted);border:1px solid var(--border) }
+.btn-g:hover { border-color:var(--border2);color:var(--text);background:var(--surface2) }
+.btn-d { background:var(--surface);color:var(--del-fg);border:1px solid rgba(248,81,73,.3) }
+.btn-d:hover { background:rgba(248,81,73,.08) }
+
+.stats { display:none;align-items:center;gap:14px;margin-left:auto;flex-wrap:wrap }
+.stat { display:flex;align-items:center;gap:5px;font-size:12px;font-family:var(--mono);color:var(--muted) }
+.st-dot { width:6px;height:6px;border-radius:50% }
+.st-dot.g { background:var(--add-fg) }
+.st-dot.r { background:var(--del-fg) }
+.st-dot.u { background:var(--subtle) }
+.stat strong { color:var(--text) }
+
+/* OUTPUT */
+.output {
+  display:none;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.35);
+  animation:up .25s ease;
+}
+.output.on { display:flex;flex-direction:column }
+@keyframes up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+.out-hdr {
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:8px;padding:10px 14px;
+  background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.out-title { font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px }
+.out-ctrls { display:flex;gap:7px;flex-wrap:wrap }
+
+/* ═══════════════════════════════════════════════════════════
+   DIFF TABLE  —  the key fixes:
+   • overflow-x:auto on each pane  → horizontal scroll, NO wrap
+   • white-space:pre on .cc        → code never breaks mid-line
+   • min-width:max-content on table → grows to fit longest line
+   • synchronized vertical scroll  → both panels move together
+   • stronger colours              → obvious at a glance
+   ═══════════════════════════════════════════════════════════ */
+.split-wrap { display:none;max-height:72vh;overflow:hidden }
+.split-wrap.on { display:flex }
+
+.diff-pane {
+  flex:1;min-width:0;
+  overflow-x:auto;
+  overflow-y:auto;
+  /* vertical sync done in JS */
+}
+.diff-pane + .diff-pane { border-left:2px solid var(--border) }
+
+.pane-cap {
+  position:sticky;top:0;z-index:10;
+  padding:7px 14px;background:var(--surface2);
+  font-family:var(--mono);font-size:11px;font-weight:600;
+  letter-spacing:.4px;text-transform:uppercase;
+  border-bottom:1px solid var(--border);
+}
+.pane-cap.L { color:var(--del-fg);border-bottom-color:rgba(248,81,73,.35) }
+.pane-cap.R { color:var(--add-fg);border-bottom-color:rgba(63,185,80,.35) }
+
+.dt {
+  border-collapse:collapse;
+  width:100%;
+  min-width:max-content;     /* ← never shrink; container scrolls horizontally */
+  font-family:var(--mono);
+  font-size:12.5px;
+  line-height:1.7;
+}
+.dt tr { vertical-align:top }
+.dt tr:hover td { filter:brightness(1.08) }
+
+/* cells */
+.cn {                      /* line number */
+  width:52px;min-width:52px;
+  padding:1px 10px 1px 4px;
+  text-align:right;user-select:none;
+  color:var(--subtle);font-size:11px;
+  border-right:1px solid var(--border);
+}
+.cg {                      /* gutter +/- */
+  width:22px;min-width:22px;
+  text-align:center;padding:1px 0;
+  font-weight:700;
+  border-right:1px solid var(--border);
+}
+.cc {                      /* code */
+  padding:1px 16px;
+  white-space:pre;         /* ← NEVER wrap */
+  color:var(--text);
+}
+
+/* added row — entire line is new */
+tr.ra     { background:var(--add-bg) }
+tr.ra .cn { background:var(--add-gutter);color:var(--add-fg) }
+tr.ra .cg { background:rgba(63,185,80,.18);color:var(--add-fg) }
+
+/* removed row — entire line is gone */
+tr.rd     { background:var(--del-bg) }
+tr.rd .cn { background:var(--del-gutter);color:var(--del-fg) }
+tr.rd .cg { background:rgba(248,81,73,.18);color:var(--del-fg) }
+
+/* paired word-diff rows: only some words changed — keep row bg very subtle */
+tr.ra-w     { background:rgba(63,185,80,.05) }
+tr.ra-w .cn { background:rgba(63,185,80,.10);color:var(--add-fg) }
+tr.ra-w .cg { background:rgba(63,185,80,.14);color:var(--add-fg) }
+
+tr.rd-w     { background:rgba(248,81,73,.05) }
+tr.rd-w .cn { background:rgba(248,81,73,.10);color:var(--del-fg) }
+tr.rd-w .cg { background:rgba(248,81,73,.14);color:var(--del-fg) }
+
+/* placeholder row (empty opposite) */
+tr.rp { opacity:.3;background:repeating-linear-gradient(
+  45deg,var(--surface2) 0px,var(--surface2) 4px,transparent 4px,transparent 8px
+)}
+
+/* WORD-LEVEL HIGHLIGHTS — vivid, primary signal on paired rows */
+.wa {
+  background:rgba(63,185,80,.32);
+  outline:1.5px solid rgba(63,185,80,.75);
+  border-radius:3px;
+  padding:0 2px;
+  color:#c3f0c8;
+}
+.wd {
+  background:rgba(248,81,73,.32);
+  outline:1.5px solid rgba(248,81,73,.75);
+  border-radius:3px;
+  padding:0 2px;
+  color:#ffc5c3;
+  text-decoration:line-through;
+  text-decoration-color:rgba(248,81,73,.55);
+}
+
+/* UNIFIED */
+.uni-wrap { display:none;max-height:72vh;overflow:auto }
+.uni-wrap.on { display:block }
+.uni-wrap .dt { min-width:max-content }
+.uni-wrap .cn { width:80px;min-width:80px }
+
+/* EMPTY */
+.empty-s { padding:64px 20px;text-align:center;color:var(--muted) }
+.empty-s .ico { font-size:44px;margin-bottom:14px }
+.empty-s h3 { font-size:15px;color:var(--text);margin-bottom:6px }
+.empty-s p { font-size:12px;font-family:var(--mono) }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width:7px;height:7px }
+::-webkit-scrollbar-track { background:var(--surface) }
+::-webkit-scrollbar-thumb { background:var(--border);border-radius:4px }
+::-webkit-scrollbar-thumb:hover { background:#484f58 }
+
+/* TOAST */
+.toast {
+  position:fixed;bottom:26px;right:26px;z-index:999;
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);padding:10px 16px;border-radius:6px;
+  font-size:13px;font-family:var(--mono);
+  box-shadow:0 6px 24px rgba(0,0,0,.4);
+  display:flex;align-items:center;gap:8px;
+  transform:translateY(70px);opacity:0;
+  transition:all .3s cubic-bezier(.34,1.56,.64,1);
+}
+.toast.show { transform:translateY(0);opacity:1 }
+
+/* RESPONSIVE */
+@media(max-width:720px){
+  .inputs { grid-template-columns:1fr }
+  .split-wrap.on { flex-direction:column }
+  .diff-pane + .diff-pane { border-left:none;border-top:2px solid var(--border) }
+  .stats { margin-left:0 }
+  .actions { flex-direction:column;align-items:stretch }
+  .btn { justify-content:center }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⌥</div>
+    <div>
+      <h1>DiffScope</h1>
+      <p>text difference checker</p>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <span class="badge live" id="liveBadge">realtime off</span>
+    <span class="badge">v3.1</span>
+    <label class="tog-wrap" onclick="toggleTheme()">
+      <div class="tog-track"><div class="tog-thumb"></div></div>
+      <span id="themeLbl">Light</span>
+    </label>
+  </div>
+</header>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <span class="tb-lbl">View</span>
+  <div class="seg">
+    <button class="sb on" id="bSplit"   onclick="setView('split')">⊞ Split</button>
+    <button class="sb"    id="bUnified" onclick="setView('unified')">≡ Unified</button>
+  </div>
+
+  <span class="tb-lbl">Compare :</span>
+  <div class="seg">
+    <button class="sb on" id="bLine" onclick="setGrain('line')">Line</button>
+    <button class="sb"    id="bWord" onclick="setGrain('word')">Word</button>
+    <!-- <button class="sb"    id="bChar" onclick="setGrain('char')">Char</button> -->
+  </div>
+
+  <button class="ibtn" id="bRT" onclick="toggleRT()">⚡ Realtime</button>
+
+  <div class="spacer"></div>
+
+  <button class="ibtn"><label>📁 File A<input type="file" accept=".txt,.md,.js,.ts,.css,.html,.json,.xml,.csv,.py" onchange="loadFile(event,'A')"></label></button>
+  <button class="ibtn"><label>📁 File B<input type="file" accept=".txt,.md,.js,.ts,.css,.html,.json,.xml,.csv,.py" onchange="loadFile(event,'B')"></label></button>
+</div>
+
+<!-- INPUTS -->
+<div class="inputs">
+  <div class="inp-panel">
+    <div class="inp-hdr">
+      <div class="inp-lbl"><span class="dot r"></span> Original</div>
+      <div class="inp-acts">
+        <button class="ibtn" onclick="clearTA('A')">✕ Clear</button>
+        <button class="ibtn" onclick="doPaste('A')">⎘ Paste</button>
+      </div>
+    </div>
+    <textarea class="code" id="textA"
+      placeholder="Paste original text here…&#10;&#10;• Any plain text, HTML, code, config, etc.&#10;• Enable Realtime for instant diff-as-you-type."
+      oninput="onInput('A')"></textarea>
+    <div class="inp-foot" id="cntA">0 chars · 0 lines</div>
+  </div>
+
+  <div class="inp-panel">
+    <div class="inp-hdr">
+      <div class="inp-lbl"><span class="dot g"></span> Modified</div>
+      <div class="inp-acts">
+        <button class="ibtn" onclick="clearTA('B')">✕ Clear</button>
+        <button class="ibtn" onclick="doPaste('B')">⎘ Paste</button>
+      </div>
+    </div>
+    <textarea class="code" id="textB"
+      placeholder="Paste modified text here…&#10;&#10;Differences shown as:&#10;  ▸ green row  = line added&#10;  ▸ red row    = line removed&#10;  ▸ underline  = exact word changed"
+      oninput="onInput('B')"></textarea>
+    <div class="inp-foot" id="cntB">0 chars · 0 lines</div>
+  </div>
+</div>
+
+<!-- ACTIONS -->
+<div class="actions">
+  <button class="btn btn-p" onclick="runCompare()">⚡ Compare</button>
+  <button class="btn btn-g" onclick="swapTexts()">⇄ Swap</button>
+  <button class="btn btn-d" onclick="resetAll()">↺ Reset</button>
+  <!-- <button class="btn btn-g" onclick="copyResult()">⎘ Copy Diff</button> -->
+  <button class="btn btn-g" onclick="collapseToggle()" id="bCollapse">⊟ Hide Unchanged</button>
+
+  <div class="stats" id="stats">
+    <div class="stat"><span class="st-dot g"></span><strong id="sAdd">0</strong>&nbsp;added</div>
+    <div class="stat"><span class="st-dot r"></span><strong id="sDel">0</strong>&nbsp;removed</div>
+    <div class="stat"><span class="st-dot u"></span><strong id="sUn">0</strong>&nbsp;unchanged</div>
+  </div>
+</div>
+
+<!-- OUTPUT -->
+<div class="output" id="output">
+  <div class="out-hdr">
+    <div class="out-title">◈ Diff Output</div>
+    <!-- <div class="out-ctrls">
+      <button class="ibtn" onclick="collapseToggle()">Toggle unchanged</button>
+      <button class="ibtn" onclick="copyResult()">⎘ Copy</button>
+    </div> -->
+  </div>
+
+  <!-- SPLIT VIEW -->
+  <div class="split-wrap on" id="splitWrap">
+    <div class="diff-pane" id="paneL" onscroll="syncScroll(this,'paneR')">
+      <div class="pane-cap L">— Original</div>
+      <table class="dt" id="tL"><tbody></tbody></table>
+    </div>
+    <div class="diff-pane" id="paneR" onscroll="syncScroll(this,'paneL')">
+      <div class="pane-cap R">+ Modified</div>
+      <table class="dt" id="tR"><tbody></tbody></table>
+    </div>
+  </div>
+
+  <!-- UNIFIED VIEW -->
+  <div class="uni-wrap" id="uniWrap">
+    <table class="dt" id="tU"><tbody></tbody></table>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<div class="toast" id="toast"><span id="tIco">✓</span><span id="tMsg">Done</span></div>
+
+<script>
+/* ── STATE ───────────────────────────────────────── */
+let viewMode  = 'split';
+let grain     = 'line';
+let rtMode    = false;
+let rtTimer   = null;
+let lastDiff  = null;
+let collapsed = false;
+let syncLock  = false;
+
+/* ── SCROLL SYNC ─────────────────────────────────── */
+function syncScroll(src, tid) {
+  if (syncLock) return;
+  syncLock = true;
+  const t = document.getElementById(tid);
+  t.scrollTop  = src.scrollTop;
+  t.scrollLeft = src.scrollLeft;
+  requestAnimationFrame(() => { syncLock = false; });
+}
+
+/* ── UTILS ───────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function toast(msg, ico='✓') {
+  const el = $('toast');
+  $('tMsg').textContent = msg;
+  $('tIco').textContent = ico;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+function updCount(side) {
+  const v = $('text'+side).value;
+  $('cnt'+side).textContent =
+    `${v.length.toLocaleString()} chars · ${(v ? v.split('\n').length : 0).toLocaleString()} lines`;
+}
+
+function onInput(side) {
+  updCount(side);
+  if (rtMode) { clearTimeout(rtTimer); rtTimer = setTimeout(runCompare, 400); }
+}
+
+/* ── CONTROLS ────────────────────────────────────── */
+function toggleTheme() {
+  const h = document.documentElement;
+  const li = h.getAttribute('data-theme')==='light';
+  h.setAttribute('data-theme', li ? 'dark' : 'light');
+  $('themeLbl').textContent = li ? 'Light' : 'Dark';
+}
+
+function setView(v) {
+  viewMode = v;
+  $('bSplit').classList.toggle('on', v==='split');
+  $('bUnified').classList.toggle('on', v==='unified');
+  $('splitWrap').classList.toggle('on',  v==='split');
+  $('uniWrap').classList.toggle('on',    v==='unified');
+  if (lastDiff) renderDiff(lastDiff);
+}
+
+function setGrain(g) {
+  grain = g;
+  ['Line','Word','Char'].forEach(x =>
+    $('b'+x).classList.toggle('on', x.toLowerCase()===g));
+  if (lastDiff) runCompare();
+}
+
+function toggleRT() {
+  rtMode = !rtMode;
+  $('bRT').classList.toggle('on', rtMode);
+  $('liveBadge').textContent = rtMode ? 'realtime on' : 'realtime off';
+  if (rtMode) runCompare();
+  toast(rtMode ? 'Realtime ON' : 'Realtime OFF', rtMode ? '⚡' : '○');
+}
+
+function clearTA(side) {
+  $('text'+side).value = '';
+  updCount(side);
+  if (rtMode) runCompare();
+}
+
+async function doPaste(side) {
+  try {
+    const t = await navigator.clipboard.readText();
+    $('text'+side).value = t;
+    updCount(side);
+    if (rtMode) runCompare();
+    toast('Pasted', '⎘');
+  } catch { toast('Clipboard denied', '✕'); }
+}
+
+function loadFile(e, side) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    $('text'+side).value = ev.target.result;
+    updCount(side);
+    if (rtMode) runCompare();
+    toast(`Loaded: ${f.name}`, '📁');
+  };
+  r.readAsText(f);
+  e.target.value = '';
+}
+
+function swapTexts() {
+  const a = $('textA'), b = $('textB');
+  [a.value, b.value] = [b.value, a.value];
+  updCount('A'); updCount('B');
+  if (rtMode || lastDiff) runCompare();
+  toast('Swapped', '⇄');
+}
+
+function resetAll() {
+  $('textA').value = ''; $('textB').value = '';
+  updCount('A'); updCount('B');
+  $('output').classList.remove('on');
+  $('stats').style.display = 'none';
+  lastDiff = null; collapsed = false;
+  toast('Reset', '↺');
+}
+
+function collapseToggle() {
+  collapsed = !collapsed;
+  $('bCollapse').textContent = collapsed ? '⊞ Show Unchanged' : '⊟ Hide Unchanged';
+  if (lastDiff) renderDiff(lastDiff);
+  toast(collapsed ? 'Unchanged hidden' : 'Unchanged shown');
+}
+
+function copyResult() {
+  if (!lastDiff) { toast('Nothing to copy', '✕'); return; }
+  const txt = lastDiff.map(d =>
+    d.type==='added'?'+ '+d.value : d.type==='removed'?'- '+d.value : '  '+d.value
+  ).join('\n');
+  navigator.clipboard.writeText(txt).then(() => toast('Copied!', '⎘'));
+}
+
+/* ── LCS DIFF ────────────────────────────────────── */
+function lcs(a, b) {
+  const m=a.length, n=b.length;
+  if (m*n > 120000) return fastDiff(a,b);
+  const dp = Array.from({length:m+1},()=>new Int32Array(n+1));
+  for (let i=1;i<=m;i++) for (let j=1;j<=n;j++)
+    dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j],dp[i][j-1]);
+  const res=[]; let i=m,j=n;
+  while(i>0&&j>0){
+    if(a[i-1]===b[j-1]){res.unshift({type:'unchanged',value:a[i-1]});i--;j--;}
+    else if(dp[i-1][j]>=dp[i][j-1]){res.unshift({type:'removed',value:a[i-1]});i--;}
+    else{res.unshift({type:'added',value:b[j-1]});j--;}
+  }
+  while(i>0){res.unshift({type:'removed',value:a[i-1]});i--;}
+  while(j>0){res.unshift({type:'added',value:b[j-1]});j--;}
+  return res;
+}
+
+function fastDiff(a,b){
+  const res=[]; let ai=0,bi=0;
+  while(ai<a.length&&bi<b.length){
+    if(a[ai]===b[bi]){res.push({type:'unchanged',value:a[ai]});ai++;bi++;}
+    else{
+      const ia=b.indexOf(a[ai],bi),ib=a.indexOf(b[bi],ai);
+      if(ia===-1&&ib===-1){res.push({type:'removed',value:a[ai++]});res.push({type:'added',value:b[bi++]});}
+      else if(ib===-1||(ia!==-1&&ia<=ib)) res.push({type:'added',value:b[bi++]});
+      else res.push({type:'removed',value:a[ai++]});
+    }
+  }
+  while(ai<a.length) res.push({type:'removed',value:a[ai++]});
+  while(bi<b.length) res.push({type:'added',value:b[bi++]});
+  return res;
+}
+
+function getDiff(tA,tB){
+  if(grain==='line') return lcs(tA.split('\n'),    tB.split('\n'));
+  if(grain==='word') return lcs(tA.split(/(\s+)/), tB.split(/(\s+)/));
+  return lcs([...tA],[...tB]);
+}
+
+/* ── INLINE WORD DIFF ────────────────────────────── */
+// Returns TWO strings: [leftHtml, rightHtml]
+// Left  = oldLine reconstructed, with removed words highlighted red
+// Right = newLine reconstructed, with added words highlighted green
+// Neither side ever contains the other side's unique words.
+function wordDiffPair(oldL, newL){
+  const aw = oldL.split(/(\s+)/);
+  const bw = newL.split(/(\s+)/);
+  const d  = lcs(aw, bw);
+
+  let leftHtml  = '';
+  let rightHtml = '';
+
+  for (const x of d) {
+    const s = esc(x.value);
+    if (x.type === 'unchanged') {
+      leftHtml  += s;   // present on both sides, plain
+      rightHtml += s;
+    } else if (x.type === 'removed') {
+      leftHtml  += `<span class="wd">${s}</span>`;
+      // do NOT add to rightHtml — this word doesn't exist on the right
+    } else {             // added
+      rightHtml += `<span class="wa">${s}</span>`;
+      // do NOT add to leftHtml — this word doesn't exist on the left
+    }
+  }
+
+  return [leftHtml, rightHtml];
+}
+
+/* ── MAIN COMPARE ────────────────────────────────── */
+function runCompare(){
+  const tA=$('textA').value, tB=$('textB').value;
+  if(!tA&&!tB){
+    $('output').classList.remove('on');
+    $('stats').style.display='none';
+    return;
+  }
+  const diff=getDiff(tA,tB);
+  lastDiff=diff;
+  $('sAdd').textContent=diff.filter(d=>d.type==='added').length;
+  $('sDel').textContent=diff.filter(d=>d.type==='removed').length;
+  $('sUn').textContent =diff.filter(d=>d.type==='unchanged').length;
+  $('stats').style.display='flex';
+  $('output').classList.add('on');
+  renderDiff(diff);
+}
+
+/* ── RENDER ──────────────────────────────────────── */
+function renderDiff(diff){
+  if(viewMode==='split') renderSplit(diff);
+  else renderUnified(diff);
+}
+
+/* helper: one table row */
+function row(cls,num,g,code){
+  return `<tr class="${cls}"><td class="cn">${num}</td><td class="cg">${g}</td><td class="cc">${code}</td></tr>`;
+}
+
+function renderSplit(diff){
+  let L='', R='', ln=1, rn=1, i=0;
+  const EMPTY_ROW = row('rp','','','');
+
+  while(i<diff.length){
+    const d=diff[i];
+
+    if(d.type==='unchanged'){
+      if(collapsed){i++;ln++;rn++;continue;}
+      const s=esc(d.value);
+      L += row('',ln,' ',s);
+      R += row('',rn,' ',s);
+      ln++;rn++;
+
+    } else if(d.type==='removed'){
+      const nxt=diff[i+1];
+      if(nxt&&nxt.type==='added'&&grain==='line'){
+        // Paired removed+added → inline word diff
+        // Use subtle row class (rd-w / ra-w) so word highlights are the focus
+        const [lHtml, rHtml] = wordDiffPair(d.value, nxt.value);
+        L += row('rd-w',ln,'−',lHtml);
+        R += row('ra-w',rn,'+',rHtml);
+        ln++;rn++;i+=2;continue;
+      }
+      L += row('rd',ln,'−',esc(d.value));
+      R += EMPTY_ROW;
+      ln++;
+
+    } else { /* added */
+      L += EMPTY_ROW;
+      R += row('ra',rn,'+',esc(d.value));
+      rn++;
+    }
+    i++;
+  }
+
+  const SAME=`<tr><td colspan="3"><div class="empty-s"><div class="ico">✓</div><h3>Texts are identical</h3><p>No differences found</p></div></td></tr>`;
+  if(!L){L=SAME;R=SAME;}
+  $('tL').querySelector('tbody').innerHTML=L;
+  $('tR').querySelector('tbody').innerHTML=R;
+}
+
+function renderUnified(diff){
+  let rows='', ln=1, rn=1, i=0;
+  while(i<diff.length){
+    const d=diff[i];
+    if(d.type==='unchanged'){
+      if(collapsed){ln++;rn++;i++;continue;}
+      rows+=row('',`${ln}&nbsp;${rn}`,' ',esc(d.value));
+      ln++;rn++;
+    } else if(d.type==='removed'){
+      const nxt=diff[i+1];
+      if(nxt&&nxt.type==='added'&&grain==='line'){
+        // Paired: show word-level highlights with subtle row bg
+        const [lHtml,rHtml]=wordDiffPair(d.value,nxt.value);
+        rows+=row('rd-w',`${ln}&nbsp;`,  '−',lHtml);
+        rows+=row('ra-w',`&nbsp;${rn}`,  '+',rHtml);
+        ln++;rn++;i+=2;continue;
+      }
+      rows+=row('rd',ln,'−',esc(d.value));ln++;
+    } else {
+      rows+=row('ra',rn,'+',esc(d.value));rn++;
+    }
+    i++;
+  }
+  if(!rows) rows=`<tr><td colspan="3"><div class="empty-s"><div class="ico">✓</div><h3>Texts are identical</h3><p>No differences found</p></div></td></tr>`;
+  $('tU').querySelector('tbody').innerHTML=rows;
+}
+</script>
+</body>
+</html>
